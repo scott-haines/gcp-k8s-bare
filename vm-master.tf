@@ -1,5 +1,6 @@
-resource "google_compute_instance" "master" {
-    name = "master-vm"
+resource "google_compute_instance" "k8s-master" {
+    count = "${var.k8s-master-count}"
+    name = "k8s-master-vm-${count.index}"
     machine_type = "f1-micro"
 
     boot_disk {
