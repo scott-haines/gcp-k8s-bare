@@ -33,7 +33,3 @@ resource "google_compute_instance" "jumpbox" {
         on_failure = "continue"
     }
 }
-
-output "jumpbox-ip" {
-  value = "${google_compute_instance.jumpbox.network_interface.0.access_config.0.nat_ip}"
-}
