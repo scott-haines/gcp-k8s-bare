@@ -9,6 +9,6 @@ resource "google_compute_instance" "master" {
     }
 
     network_interface {
-        subnetwork = "${google_compute_subnetwork.management-subnet.name}"
+        subnetwork = "${google_compute_subnetwork.vpc-subnet.name}"
     }
 }

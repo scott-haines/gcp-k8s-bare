@@ -1,6 +1,7 @@
 resource "google_compute_instance" "jumpbox" {
     name = "jumpbox-vm"
     machine_type = "f1-micro"
+    tags = ["jumpbox"]
     metadata = {
         ssh-keys = "${var.ssh_username}:${file("~/.ssh/id_rsa.pub")}"
     }
@@ -12,15 +13,11 @@ resource "google_compute_instance" "jumpbox" {
     }
 
     network_interface {
-        subnetwork = "${google_compute_subnetwork.external-subnet.name}"
+        subnetwork = "${google_compute_subnetwork.vpc-subnet.name}"
 
         access_config {
             // this section is included to give external IP
         }
-    }
-
-    network_interface {
-        subnetwork = "${google_compute_subnetwork.management-subnet.name}"
     }
 
     provisioner "local-exec" {
