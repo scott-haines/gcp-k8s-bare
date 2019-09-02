@@ -1,7 +1,7 @@
 terraform {
     backend "gcs" {
         credentials="secrets/service-account-credentials.json"
-        bucket = "${var.backend-bucket-name}"
+        bucket = "lfd259-shaines"
         prefix = "terraform/state"
     }
 }

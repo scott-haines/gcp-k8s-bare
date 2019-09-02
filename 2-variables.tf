@@ -1,4 +1,3 @@
-variable "backend-bucket-name" {}
 variable "project-name" {}
 variable "k8s-jumpbox_fqdn" {}
 variable "dns_k8s-jumpbox_username" {}
