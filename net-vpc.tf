@@ -25,17 +25,14 @@ resource "google_compute_firewall" "allow-internal" {
     source_ranges = ["${google_compute_subnetwork.vpc-subnet.ip_cidr_range}"]
 }
 
-resource "google_compute_firewall" "allow-jumpbox" {
-    name = "allow-jumpbox"
+resource "google_compute_firewall" "allow-ssh-from-anywhere-to-bastion" {
+    name = "allow-bastion"
     network = "${google_compute_network.vpc.name}"
 
-    allow {
-        protocol = "icmp"
-    }
     allow {
         protocol = "tcp"
         ports = ["22"]
     }
 
-    target_tags = ["jumpbox"]
+    target_tags = ["bastion"]
 }
