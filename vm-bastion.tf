@@ -26,7 +26,7 @@ resource "google_compute_instance" "bastion" {
         user = "${var.ssh-username}"
         agent = "false"
         private_key = "${file("${var.ssh-private-key}")}"
-        host = "${google_compute_instance.k8s-master.network_interface.0.access_config.0.nat_ip}"
+        host = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
     }
 
     provisioner "local-exec" {
