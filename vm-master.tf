@@ -4,7 +4,7 @@ resource "google_compute_instance" "k8s-master" {
     machine_type = "f1-micro"
     tags = ["k8s-master"]
     metadata = {
-        ssh-keys = "${var.ssh_username}:${file("~/.ssh/id_rsa.pub")}"
+        ssh-keys = "${var.ssh-username}:${file("~/.ssh/id_rsa.pub")}"
     }
 
     boot_disk {
@@ -20,7 +20,7 @@ resource "google_compute_instance" "k8s-master" {
     provisioner "remote-exec" {
         connection {
             type = "ssh"
-            user = "${var.ssh_username}"
+            user = "${var.ssh-username}"
             agent = "false"
             private_key = "${file("${var.ssh-private-key}")}"
             host = "${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}"

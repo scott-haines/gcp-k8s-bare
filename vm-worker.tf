@@ -4,7 +4,7 @@ resource "google_compute_instance" "k8s-worker" {
     machine_type = "f1-micro"
     tags = ["k8s-worker"]
     metadata = {
-        ssh-keys = "${var.ssh_username}:${file("~/.ssh/id_rsa.pub")}"
+        ssh-keys = "${var.ssh-username}:${file("~/.ssh/id_rsa.pub")}"
     }
     
     boot_disk {

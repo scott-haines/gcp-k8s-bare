@@ -4,7 +4,7 @@ resource "google_compute_instance" "bastion" {
     tags            = ["bastion"]
     
     metadata = {
-        ssh-keys = "${var.ssh_username}:${file("~/.ssh/id_rsa.pub")}"
+        ssh-keys = "${var.ssh-username}:${file("~/.ssh/id_rsa.pub")}"
     }
 
     boot_disk {
@@ -22,12 +22,12 @@ resource "google_compute_instance" "bastion" {
     }
 
     provisioner "local-exec" {
-        command = "curl -X POST 'https://${var.dns_k8s-bastion_username}:${var.dns_k8s-bastion_password}@domains.google.com/nic/update?hostname=${var.k8s-bastion_fqdn}&myip=${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}&offline=no'"
+        command = "curl -X POST 'https://${var.dns-k8s-bastionuser-name}:${var.dns-k8s-bastion-password}@domains.google.com/nic/update?hostname=${var.k8s-bastion-fqdn}&myip=${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}&offline=no'"
     }
 
     provisioner "local-exec" {
         when = "destroy"
-        command = "curl -X POST 'https://${var.dns_k8s-bastion_username}:${var.dns_k8s-bastion_password}@domains.google.com/nic/update?hostname=${var.k8s-bastion_fqdn}&offline=yes'"
+        command = "curl -X POST 'https://${var.dns-k8s-bastionuser-name}:${var.dns-k8s-bastion-password}@domains.google.com/nic/update?hostname=${var.k8s-bastion-fqdn}&offline=yes'"
         on_failure = "continue"
     }
 }

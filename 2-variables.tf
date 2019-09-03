@@ -1,8 +1,8 @@
 variable "project-name" {}
-variable "k8s-bastion_fqdn" {}
-variable "dns_k8s-bastion_username" {}
-variable "dns_k8s-bastion_password" {}
-variable "ssh_username" {}
+variable "k8s-bastion-fqdn" {}
+variable "dns-k8s-bastionuser-name" {}
+variable "dns-k8s-bastion-password" {}
+variable "ssh-username" {}
 variable "ssh-private-key" {}
 
 variable "k8s-master-count" {}
