@@ -17,17 +17,18 @@ resource "google_compute_instance" "k8s-master" {
         subnetwork = "${google_compute_subnetwork.vpc-subnet.name}"
     }
 
-    connection {
-        type = "ssh"
-        host = "${google_compute_instance.k8s-master.*.network_interface.0.network_ip}"
-        user = "${var.ssh_username}"
-        private_key = "${file("${var.ssh-private-key}")}"
-
-        bastion_host = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
-        bastion_private_key = "${file("${var.ssh-private-key}")}"
-    }
-
     provisioner "remote-exec" {
-        inline = ["echo $HOST"]
+        connection {
+            type = "ssh"
+            user = "${var.ssh_username}"
+            agent = "false"
+            private_key = "${file("${var.ssh-private-key}")}"
+            host = "${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}"
+
+            bastion_host = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+            bastion_private_key = "${file("${var.ssh-private-key}")}"
+        }
+
+        inline = ["echo $HOSTNAME"]
     }
 }
