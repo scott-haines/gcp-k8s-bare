@@ -68,6 +68,11 @@ resource "google_compute_instance" "bastion" {
     ]
   }
 
+  # ** NOTE ** - An existing bug in terraform prevents a tainted resource from executing provisioners
+  #  with the 'when = "destroy"' attribute.  See https://github.com/hashicorp/terraform/issues/13549
+  # This bug manifests itself primarily when tainting a resource then executing terraform destroy
+  #  without first untainting the resource.  The behaviour is expected for the workflow 
+  #  "taint resource => terraform apply" to re-create a resource. 
   provisioner "local-exec" {
     when       = "destroy"
     command    = "curl -X POST 'https://${var.dns-k8s-bastion-username}:${var.dns-k8s-bastion-password}@domains.google.com/nic/update?hostname=${var.k8s-bastion-fqdn}&offline=yes'"
