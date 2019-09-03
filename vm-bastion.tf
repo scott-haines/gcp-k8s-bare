@@ -46,8 +46,26 @@ resource "google_compute_instance" "bastion" {
   }
 
   provisioner "file" {
-    source       = "certificate-configs"
-    destrination = "certificate-configs"
+    source      = "certificate-configs"
+    destination = "certificate-configs"
+  }
+
+  provisioner "remote-exec" {
+    # Note the indentation of the EOT - Terraform is picky about the EOTs :(
+    # On the plus side this allows us to do the following with nested EOFs :)
+    inline = [<<EOT
+    cd certificate-configs
+    
+    cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      admin-csr.json | cfssljson -bare admin
+
+    EOT
+    ]
   }
 
   provisioner "local-exec" {
