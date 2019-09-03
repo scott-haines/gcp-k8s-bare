@@ -21,13 +21,32 @@ resource "google_compute_instance" "bastion" {
         }
     }
 
+    connection {
+        type = "ssh"
+        user = "${var.ssh-username}"
+        agent = "false"
+        private_key = "${file("${var.ssh-private-key}")}"
+        host = "${google_compute_instance.k8s-master.network_interface.0.access_config.0.nat_ip}"
+    }
+
     provisioner "local-exec" {
-        command = "curl -X POST 'https://${var.dns-k8s-bastionuser-name}:${var.dns-k8s-bastion-password}@domains.google.com/nic/update?hostname=${var.k8s-bastion-fqdn}&myip=${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}&offline=no'"
+        command = "curl -X POST 'https://${var.dns-k8s-bastion-username}:${var.dns-k8s-bastion-password}@domains.google.com/nic/update?hostname=${var.k8s-bastion-fqdn}&myip=${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}&offline=no'"
+    }
+
+    provisioner "remote-exec"{
+        inline = [
+            "sudo apt update",
+            "sudo apt upgrade -y",
+            "curl https://pkg.cfssl.org/R1.2/cfssl_linux-amd64 -o /usr/local/bin/cfssl",
+            "curl https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64 -o /usr/local/bin/cfssljson",
+            "curl https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl",
+            "chmod +x /usr/local/bin/cfssl /usr/local/bin/cfssljson /usr/local/bin/kubectl"
+        ]
     }
 
     provisioner "local-exec" {
         when = "destroy"
-        command = "curl -X POST 'https://${var.dns-k8s-bastionuser-name}:${var.dns-k8s-bastion-password}@domains.google.com/nic/update?hostname=${var.k8s-bastion-fqdn}&offline=yes'"
+        command = "curl -X POST 'https://${var.dns-k8s-bastion-username}:${var.dns-k8s-bastion-password}@domains.google.com/nic/update?hostname=${var.k8s-bastion-fqdn}&offline=yes'"
         on_failure = "continue"
     }
 }
