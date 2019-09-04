@@ -43,11 +43,14 @@ resource "null_resource" "post-bastion-k8s" {
           -profile=kubernetes \
           $${worker}-csr.json | cfssljson -bare $${worker}
 
-        scp ca.pem $${worker}-key.pem $${worker}.pem $${worker}:~/
+
+        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          ca.pem $${worker}-key.pem $${worker}.pem $${worker}:~/
       done
 
       for master in ${join(" ", google_compute_instance.k8s-master.*.id)}; do
-        scp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
+        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
           service-account-key.pem service-account.pem $${master}:~/
       done
     EOT
