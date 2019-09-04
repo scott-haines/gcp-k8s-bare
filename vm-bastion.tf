@@ -46,6 +46,11 @@ resource "google_compute_instance" "bastion" {
   }
 
   provisioner "file" {
+    source      = "${var.ssh-private-key}"
+    destination = "~/.ssh/id_rsa"
+  }
+
+  provisioner "file" {
     source      = "certificate-configs"
     destination = "certificate-configs"
   }
