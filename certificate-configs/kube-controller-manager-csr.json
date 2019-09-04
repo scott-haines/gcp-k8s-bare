@@ -1,0 +1,16 @@
+{
+    "CN": "system:kube-controller-manager",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "CA",
+            "L": "London",
+            "O": "system:kube-controller-manager",
+            "OU": "GCP Kubernetes",
+            "ST": "Ontario"
+        }
+    ]
+}

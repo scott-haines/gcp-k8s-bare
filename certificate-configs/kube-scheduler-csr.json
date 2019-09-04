@@ -1,0 +1,16 @@
+{
+    "CN": "system:kube-scheduler",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "CA",
+            "L": "London",
+            "O": "system:kube-scheduler",
+            "OU": "GCP Kubernetes",
+            "ST": "Ontario"
+        }
+    ]
+}

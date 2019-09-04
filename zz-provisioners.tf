@@ -37,9 +37,10 @@ resource "null_resource" "post-bastion-k8s" {
     # Note the indentation of the EOT - Terraform is picky about the EOTs
     inline = [<<EOT
       cd certificate-configs
+      
       for worker in ${join(" ", google_compute_instance.k8s-worker.*.id)}; do
-        cp worker-template.json $${worker}-csr.json
-        WORKER_NODE=$${worker} envsubst < $${worker}-csr.json
+        cp certificate-templates/worker-template.json certificate-templates/$${worker}-csr.json
+        WORKER_NODE=$${worker} envsubst < certificate-templates/$${worker}-csr.json > $${worker}-csr.json
 
         cfssl gencert \
           -ca=ca.pem \

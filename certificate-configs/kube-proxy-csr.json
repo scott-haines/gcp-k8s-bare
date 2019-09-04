@@ -1,0 +1,16 @@
+{
+    "CN": "system:kube-proxy",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "CA",
+            "L": "London",
+            "O": "system:node-proxier",
+            "OU": "GCP Kubernetes",
+            "ST": "Ontario"
+        }
+    ]
+}
