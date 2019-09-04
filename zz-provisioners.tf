@@ -21,13 +21,6 @@ resource "null_resource" "post-bastion-k8s" {
     host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
   }
 
-  provisioner "remote-exec" {
-    inline = [
-      "echo ${join(" ", google_compute_instance.k8s-master.*.id)} > master-instances.txt",
-      "echo ${join(" ", google_compute_instance.k8s-worker.*.id)} > worker-instances.txt"
-    ]
-  }
-
   provisioner "file" {
     source      = "certificate-templates"
     destination = "certificate-configs"
@@ -49,6 +42,13 @@ resource "null_resource" "post-bastion-k8s" {
           -hostname=$${worker} \
           -profile=kubernetes \
           $${worker}-csr.json | cfssljson -bare $${worker}
+
+        scp ca.pem $${worker}-key.pem $${worker}.pem $${worker}:~/
+      done
+
+      for master in ${join(" ", google_compute_instance.k8s-master.*.id)}; do
+        scp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
+          service-account-key.pem service-account.pem $${master}:~/
       done
     EOT
     ]
