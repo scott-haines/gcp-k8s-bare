@@ -30,6 +30,7 @@ resource "null_resource" "post-bastion-k8s" {
     # Note the indentation of the EOT - Terraform is picky about the EOTs
     inline = [<<EOT
       cd certificate-configs
+      KUBERNETES_ILB_ADDRESS=${google_compute_forwarding_rule.k8s-api-fr.ip_address}
       
       for worker in ${join(" ", google_compute_instance.k8s-worker.*.id)}; do
         cp certificate-templates/worker-template.json certificate-templates/$${worker}-csr.json
@@ -46,6 +47,25 @@ resource "null_resource" "post-bastion-k8s" {
 
         scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
           ca.pem $${worker}-key.pem $${worker}.pem $${worker}:~/
+      
+        kubectl config set-cluster gcp-kubernetes \
+          --certificate-authority=ca.pem \
+          --embed-certs=true \
+          --server=https://$${KUBERNETES_ILB_ADDRESS}:6443 \
+          --kubeconfig=$${worker}.kubeconfig
+
+        kubectl config set-credentials system:node:$${worker} \
+          --client-certificate=$${worker}.pem \
+          --client-key=$${worker}-key.pem \
+          --embed-certs=true \
+          --kubeconfig=$${worker}.kubeconfig
+
+        kubectl config set-context default \
+          --cluster=gcp-kubernetes \
+          --user=system:node:$${worker} \
+          --kubeconfig=$${worker}.kubeconfig
+
+        kubectl config use-context default --kubeconfig=$${worker}.kubeconfig
       done
 
       for master in ${join(" ", google_compute_instance.k8s-master.*.id)}; do
