@@ -36,8 +36,8 @@ resource "google_compute_instance" "bastion" {
   provisioner "remote-exec" {
     # Configure the bastion to be able to execute cfssl and kubectl commands.
     inline = [
-      "sudo apt update",
-      "sudo apt upgrade -y",
+      # "sudo apt update",
+      # "sudo apt upgrade -y",
       "sudo curl https://pkg.cfssl.org/R1.2/cfssl_linux-amd64 -o /usr/local/bin/cfssl",
       "sudo curl https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64 -o /usr/local/bin/cfssljson",
       "sudo curl https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl",
