@@ -273,8 +273,9 @@ resource "null_resource" "bootstrap-k8s-control-plane" {
         encryption-config.yaml /var/lib/kubernetes/
 
       export INTERNAL_IP=${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}
-      export ETCD_SERVERS=$(echo "${join("\n", google_compute_instance.k8s-master.*.network_interface.0.network_ip)}" | awk -F '\n' '{ print "https://" $1 ":2380"; line="" }' | paste -sd "," -)
+      export ETCD_SERVERS=$(echo "${join("\n", google_compute_instance.k8s-master.*.network_interface.0.network_ip)}" | awk -F '\n' '{ print "https://" $1 ":2379"; line="" }' | paste -sd "," -)
       export SERVICE_CLUSTER_CIDR=${var.k8s-service-cluster-ip-cidr}
+      export API_SERVER_COUNT=${var.k8s-master-count}
       envsubst < kube-apiserver-template.service > kube-apiserver.service
       sudo mv kube-apiserver.service /etc/systemd/system/kube-apiserver.service
     EOT
@@ -296,6 +297,36 @@ resource "null_resource" "bootstrap-k8s-control-plane" {
       envsubst < kube-controller-manager-template.service > kube-controller-manager.service
       sudo mv kube-controller-manager.service /etc/systemd/system/kube-controller-manager.service
     EOT
+    ]
+  }
+
+  provisioner "file" {
+    source      = "service-templates/kube-scheduler.yaml"
+    destination = "kube-scheduler.yaml"
+  }
+  provisioner "file" {
+    source      = "service-templates/kube-scheduler.service"
+    destination = "kube-scheduler.service"
+  }
+
+  provisioner "remote-exec" {
+    # Note the indentation of the EOT - Terraform is picky about the EOTs
+    inline = [<<EOT
+      sudo mv kube-scheduler.kubeconfig /var/lib/kubernetes/
+
+      sudo mkdir -p /etc/kubernetes/config/
+      sudo mv kube-scheduler.yaml /etc/kubernetes/config/kube-scheduler.yaml
+      sudo mv kube-scheduler.service /etc/systemd/system/kube-scheduler.service
+    EOT
+    ]
+  }
+
+  provisioner "remote-exec" {
+    # Note the indentation of the EOT - Terraform is picky about the EOTs
+    inline = [
+      "sudo systemctl daemon-reload",
+      "sudo systemctl enable kube-apiserver kube-controller-manager kube-scheduler",
+      "sudo systemctl start kube-apiserver kube-controller-manager kube-scheduler"
     ]
   }
 }
