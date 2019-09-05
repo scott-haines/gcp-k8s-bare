@@ -322,11 +322,44 @@ resource "null_resource" "bootstrap-k8s-control-plane" {
   }
 
   provisioner "remote-exec" {
-    # Note the indentation of the EOT - Terraform is picky about the EOTs
     inline = [
       "sudo systemctl daemon-reload",
       "sudo systemctl enable kube-apiserver kube-controller-manager kube-scheduler",
       "sudo systemctl start kube-apiserver kube-controller-manager kube-scheduler"
+    ]
+  }
+}
+
+resource "null_resource" "install-nginx-for-healthchecks" {
+  count = "${var.k8s-master-count}"
+  depends_on = [
+    "null_resource.bootstrap-k8s-control-plane"
+  ]
+
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+    host        = "${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}"
+
+    bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+    bastion_private_key = "${file("${var.ssh-private-key}")}"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/kubernetes.default.svc.cluster.local"
+    destination = "kubernetes.default.svc.cluster.local"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt update",
+      "sudo apt install -y nginx",
+      "sudo mv kubernetes.default.svc.cluster.local /etc/nginx/sites-available/kubernetes.default.svc.cluster.local",
+      "sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/",
+      "sudo systemctl restart nginx",
+      "sudo systemctl enable nginx"
     ]
   }
 }
