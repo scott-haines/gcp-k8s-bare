@@ -35,13 +35,15 @@ resource "google_compute_instance" "bastion" {
 
   provisioner "remote-exec" {
     # Configure the bastion to be able to execute cfssl and kubectl commands.
+    # Download other required items to store
     inline = [
       # "sudo apt update",
       # "sudo apt upgrade -y",
       "sudo curl https://pkg.cfssl.org/R1.2/cfssl_linux-amd64 -o /usr/local/bin/cfssl",
       "sudo curl https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64 -o /usr/local/bin/cfssljson",
       "sudo curl https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl",
-      "sudo chmod +x /usr/local/bin/cfssl /usr/local/bin/cfssljson /usr/local/bin/kubectl"
+      "sudo chmod +x /usr/local/bin/cfssl /usr/local/bin/cfssljson /usr/local/bin/kubectl",
+      "curl -L https://github.com/etcd-io/etcd/releases/download/v3.4.0/etcd-v3.4.0-linux-amd64.tar.gz -o etcd-v3.4.0-linux-amd64.tar.gz"
     ]
   }
 

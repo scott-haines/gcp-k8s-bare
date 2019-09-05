@@ -175,6 +175,11 @@ resource "null_resource" "generate-certs-kubeconfigs-and-distribute" {
         scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
           encryption-config.yaml $${master}:~/
       done
+
+      for master in ${join(" ", google_compute_instance.k8s-master.*.id)}; do
+        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          ~/etcd-v3.4.0-linux-amd64.tar.gz $${master}:~/
+      done
     EOT
     ]
   }
@@ -186,30 +191,41 @@ resource "null_resource" "bootstrap-etcd-on-k8s-masters" {
     "null_resource.generate-certs-kubeconfigs-and-distribute"
   ]
 
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+    host        = "${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}"
+
+    bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+    bastion_private_key = "${file("${var.ssh-private-key}")}"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/etcd-template.service"
+    destination = "etcd-template.service"
+  }
+
   # This needs to be executed on each of the masters
   provisioner "remote-exec" {
-    connection {
-      type        = "ssh"
-      user        = "${var.ssh-username}"
-      agent       = "false"
-      private_key = "${file("${var.ssh-private-key}")}"
-      host        = "${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}"
-
-      bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
-      bastion_private_key = "${file("${var.ssh-private-key}")}"
-    }
-
     # Note the indentation of the EOT - Terraform is picky about the EOTs
     inline = [<<EOT
-      # Download the etcd binaries and upload to managers
-      curl -L https://github.com/etcd-io/etcd/releases/download/v3.4.0/etcd-v3.4.0-linux-amd64.tar.gz -o etcd-v3.4.0-linux-amd64.tar.gz
       tar -xvf etcd-v3.4.0-linux-amd64.tar.gz
+      sudo mv etcd-v3.4.0-linux-amd64/etcd* /usr/local/bin/
       sudo mkdir -p /etc/etcd /var/lib/etcd
       sudo cp ca.pem kubernetes-key.pem kubernetes.pem /etc/etcd/
 
       export INTERNAL_IP=${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}
       export ETCD_NAME=$(hostname -s)
-      echo "${join(",", google_compute_instance.k8s-master.*.id)}|${join(",", google_compute_instance.k8s-master.*.network_interface.0.network_ip)}" > master_zipmap.txt
+      echo "${join(",", google_compute_instance.k8s-master.*.id)}" > master_names.txt
+      echo "${join(",", google_compute_instance.k8s-master.*.network_interface.0.network_ip)}" > master_ips.txt
+      export INITIAL_CLUSTER=$(paste master_names.txt master_ips.txt | awk -F '\t' '{ print $1 "=https://" $2 ":2380"; line="" }' | paste -sd "," -)
+      envsubst < etcd-template.service > etcd.service
+      sudo mv etcd.service /etc/systemd/system/etcd.service
+      sudo systemctl daemon-reload
+      sudo systemctl enable etcd
+      sudo systemctl start etcd
     EOT
     ]
   }
