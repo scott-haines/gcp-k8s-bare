@@ -280,4 +280,22 @@ resource "null_resource" "bootstrap-k8s-control-plane" {
     EOT
     ]
   }
+
+  provisioner "file" {
+    source      = "service-templates/kube-controller-manager-template.service"
+    destination = "kube-controller-manager-template.service"
+  }
+
+  provisioner "remote-exec" {
+    # Note the indentation of the EOT - Terraform is picky about the EOTs
+    inline = [<<EOT
+      sudo mv kube-controller-manager.kubeconfig /var/lib/kubernetes/
+
+      export K8S_POD_NETWORK_CIDR=${var.k8s-pod-network-cidr}
+      export SERVICE_CLUSTER_CIDR=${var.k8s-service-cluster-ip-cidr}
+      envsubst < kube-controller-manager-template.service > kube-controller-manager.service
+      sudo mv kube-controller-manager.service /etc/systemd/system/kube-controller-manager.service
+    EOT
+    ]
+  }
 }
