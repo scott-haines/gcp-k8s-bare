@@ -5,6 +5,7 @@ resource "google_compute_instance" "k8s-worker" {
   tags         = ["k8s-worker"]
   metadata = {
     ssh-keys = "${var.ssh-username}:${file("~/.ssh/id_rsa.pub")}"
+    pod-cidr = "${cidrsubnet(var.k8s-pod-network-subnet, var.k8s-worker-count, count.index)}"
   }
 
   boot_disk {

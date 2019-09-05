@@ -180,6 +180,12 @@ resource "null_resource" "generate-certs-kubeconfigs-and-distribute" {
         scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
           ~/etcd-v3.4.0-linux-amd64.tar.gz $${master}:~/
       done
+
+      for master in ${join(" ", google_compute_instance.k8s-master.*.id)}; do
+        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          ~/kube-apiserver ~/kube-controller-manager ~/kube-scheduler \
+          /usr/local/bin/kubectl $${master}:~/
+      done
     EOT
     ]
   }
@@ -226,6 +232,51 @@ resource "null_resource" "bootstrap-etcd-on-k8s-masters" {
       sudo systemctl daemon-reload
       sudo systemctl enable etcd
       sudo systemctl start etcd
+    EOT
+    ]
+  }
+}
+
+resource "null_resource" "bootstrap-k8s-control-plane" {
+  count = "${var.k8s-master-count}"
+  depends_on = [
+    "null_resource.bootstrap-etcd-on-k8s-masters"
+  ]
+
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+    host        = "${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}"
+
+    bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+    bastion_private_key = "${file("${var.ssh-private-key}")}"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/kube-apiserver-template.service"
+    destination = "kube-apiserver-template.service"
+  }
+
+  # This needs to be executed on each of the masters
+  provisioner "remote-exec" {
+    # Note the indentation of the EOT - Terraform is picky about the EOTs
+    inline = [<<EOT
+      chmod +x kube-apiserver kube-controller-manager kube-scheduler kubectl
+      sudo mv kube-apiserver kube-controller-manager kube-scheduler kubectl /usr/local/bin/
+
+      sudo mkdir -p /var/lib/kubernetes/
+
+      sudo mv ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
+        service-account-key.pem service-account.pem \
+        encryption-config.yaml /var/lib/kubernetes/
+
+      export INTERNAL_IP=${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}
+      export ETCD_SERVERS=$(echo "${join(",", google_compute_instance.k8s-master.*.network_interface.0.network_ip)}" | awk -F '\n' '{ print "https://" $1 ":2380"; line="" }' | paste -sd "," -)
+      export SERVICE_CLUSTER_CIDR=${var.k8s-service-cluster-ip-cidr}
+      envsubst < kube-apiserver-template.service > kube-apiserver.service
+      sudo mv kube-apiserver.service /etc/systemd/system/kube-apiserver.service
     EOT
     ]
   }
