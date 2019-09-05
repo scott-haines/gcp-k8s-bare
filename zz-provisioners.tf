@@ -224,8 +224,8 @@ resource "null_resource" "bootstrap-etcd-on-k8s-masters" {
 
       export INTERNAL_IP=${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}
       export ETCD_NAME=$(hostname -s)
-      echo "${join(",", google_compute_instance.k8s-master.*.id)}" > master_names.txt
-      echo "${join(",", google_compute_instance.k8s-master.*.network_interface.0.network_ip)}" > master_ips.txt
+      echo "${join("\n", google_compute_instance.k8s-master.*.id)}" > master_names.txt
+      echo "${join("\n", google_compute_instance.k8s-master.*.network_interface.0.network_ip)}" > master_ips.txt
       export INITIAL_CLUSTER=$(paste master_names.txt master_ips.txt | awk -F '\t' '{ print $1 "=https://" $2 ":2380"; line="" }' | paste -sd "," -)
       envsubst < etcd-template.service > etcd.service
       sudo mv etcd.service /etc/systemd/system/etcd.service
@@ -273,7 +273,7 @@ resource "null_resource" "bootstrap-k8s-control-plane" {
         encryption-config.yaml /var/lib/kubernetes/
 
       export INTERNAL_IP=${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, count.index)}
-      export ETCD_SERVERS=$(echo "${join(",", google_compute_instance.k8s-master.*.network_interface.0.network_ip)}" | awk -F '\n' '{ print "https://" $1 ":2380"; line="" }' | paste -sd "," -)
+      export ETCD_SERVERS=$(echo "${join("\n", google_compute_instance.k8s-master.*.network_interface.0.network_ip)}" | awk -F '\n' '{ print "https://" $1 ":2380"; line="" }' | paste -sd "," -)
       export SERVICE_CLUSTER_CIDR=${var.k8s-service-cluster-ip-cidr}
       envsubst < kube-apiserver-template.service > kube-apiserver.service
       sudo mv kube-apiserver.service /etc/systemd/system/kube-apiserver.service
