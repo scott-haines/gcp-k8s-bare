@@ -10,6 +10,30 @@ resource "google_compute_subnetwork" "vpc-subnet" {
   ip_cidr_range = "10.0.0.0/24"
 }
 
+resource "google_compute_router" "nat-router" {
+  name    = "nat-router"
+  network = "${google_compute_network.vpc.self_link}"
+  bgp {
+    asn = 64514
+  }
+}
+
+resource "google_compute_address" "nat-external-ip" {
+  name = "nat-external-ip"
+}
+
+resource "google_compute_router_nat" "nat-cloud" {
+  name                               = "nat-cloud"
+  router                             = "${google_compute_router.nat-router.name}"
+  nat_ip_allocate_option             = "MANUAL_ONLY"
+  nat_ips                            = ["${google_compute_address.nat-external-ip.self_link}"]
+  source_subnetwork_ip_ranges_to_nat = "LIST_OF_SUBNETWORKS"
+  subnetwork {
+    name                    = "${google_compute_subnetwork.vpc-subnet.self_link}"
+    source_ip_ranges_to_nat = ["ALL_IP_RANGES"]
+  }
+}
+
 resource "google_compute_firewall" "allow-internal" {
   name    = "allow-internal"
   network = "${google_compute_network.vpc.name}"
