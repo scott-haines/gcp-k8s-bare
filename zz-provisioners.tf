@@ -363,3 +363,39 @@ resource "null_resource" "install-nginx-for-healthchecks" {
     ]
   }
 }
+
+resource "null_resource" "configure-kube-apiserver-rbac" {
+  depends_on = [
+    "null_resource.install-nginx-for-healthchecks"
+  ]
+
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+
+    # Only execute this on the first master (index 0)
+    host = "${element(google_compute_instance.k8s-master.*.network_interface.0.network_ip, 0)}"
+
+    bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+    bastion_private_key = "${file("${var.ssh-private-key}")}"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/kubeapi-cluster-role.yaml"
+    destination = "kubeapi-cluster-role.yaml"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/kubeapi-cluster-role-binding.yaml"
+    destination = "kubeapi-cluster-role-binding.yaml"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "kubectl apply --kubeconfig admin.kubeconfig -f kubeapi-cluster-role.yaml",
+      "kubectl apply --kubeconfig admin.kubeconfig -f kubeapi-cluster-role-binding.yaml"
+    ]
+  }
+}
