@@ -99,7 +99,7 @@ resource "google_compute_instance" "bastion" {
       -ca=ca.pem \
       -ca-key=ca-key.pem \
       -config=ca-config.json \
-      -hostname=${cidrhost(var.k8s-service-cluster-ip-cidr, 1)},${join(",", google_compute_instance.k8s-master.*.network_interface.0.network_ip)},127.0.0.1,kubernetes.default \
+      -hostname=${var.k8s-api-fqdn},${cidrhost(var.k8s-service-cluster-ip-cidr, 1)},${join(",", google_compute_instance.k8s-master.*.network_interface.0.network_ip)},127.0.0.1,kubernetes.default \
       -profile=kubernetes \
       kubernetes-csr.json | cfssljson -bare kubernetes
     cfssl gencert \

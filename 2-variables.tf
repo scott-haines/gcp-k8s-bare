@@ -1,7 +1,10 @@
 variable "project-name" {}
 variable "k8s-bastion-fqdn" {}
+variable "k8s-api-fqdn" {}
 variable "dns-k8s-bastion-username" {}
 variable "dns-k8s-bastion-password" {}
+variable "dns-k8s-api-username" {}
+variable "dns-k8s-api-password" {}
 variable "ssh-username" {}
 variable "ssh-private-key" {}
 

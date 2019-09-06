@@ -29,3 +29,19 @@ resource "google_compute_forwarding_rule" "k8s-api-forwarding-rule" {
   target     = "${google_compute_target_pool.k8s-api-target-pool.self_link}"
   port_range = "6443"
 }
+
+resource "null_resource" "k8s-api-forwarding-public-ip-update" {
+  triggers = {
+    k8s-api-forwarding-rule = "${google_compute_forwarding_rule.k8s-api-forwarding-rule.id}"
+  }
+
+  provisioner "local-exec" {
+    command = "curl -X POST 'https://${var.dns-k8s-api-username}:${var.dns-k8s-api-password}@domains.google.com/nic/update?hostname=${var.k8s-api-fqdn}&myip=${google_compute_forwarding_rule.k8s-api-forwarding-rule.ip_address}&offline=no'"
+  }
+
+  provisioner "local-exec" {
+    when       = "destroy"
+    command    = "curl -X POST 'https://${var.dns-k8s-api-username}:${var.dns-k8s-api-password}@domains.google.com/nic/update?hostname=${var.k8s-api-fqdn}&offline=yes'"
+    on_failure = "continue"
+  }
+}
