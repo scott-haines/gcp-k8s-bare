@@ -30,7 +30,7 @@ resource "null_resource" "generate-certs-kubeconfigs-and-distribute" {
     # Note the indentation of the EOT - Terraform is picky about the EOTs
     inline = [<<EOT
       cd certificate-configs
-      KUBERNETES_ILB_ADDRESS=${google_compute_forwarding_rule.k8s-api-fr.ip_address}
+      KUBERNETES_ILB_ADDRESS=${google_compute_forwarding_rule.k8s-api-forwarding-rule.ip_address}
       
       for worker in ${join(" ", google_compute_instance.k8s-worker.*.id)}; do
         cp certificate-templates/worker-template.json certificate-templates/$${worker}-csr.json

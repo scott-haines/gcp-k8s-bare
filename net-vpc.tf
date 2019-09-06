@@ -46,7 +46,11 @@ resource "google_compute_firewall" "allow-internal" {
     ports    = ["0-65535"]
   }
 
-  source_ranges = ["${google_compute_subnetwork.vpc-subnet.ip_cidr_range}"]
+  source_ranges = [
+    "${google_compute_subnetwork.vpc-subnet.ip_cidr_range}",
+    "${var.k8s-pod-network-cidr}",
+    "${var.k8s-service-cluster-ip-cidr}"
+  ]
 }
 
 resource "google_compute_firewall" "allow-ssh-from-anywhere-to-bastion" {
