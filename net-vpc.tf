@@ -64,3 +64,13 @@ resource "google_compute_firewall" "allow-ssh-from-anywhere-to-bastion" {
 
   target_tags = ["bastion"]
 }
+
+resource "google_compute_route" "route-pods" {
+  count       = "${var.k8s-worker-count}"
+  name        = "pod-route-${replace(element(google_compute_instance.k8s-worker.*.metadata.pod-cidr, count.index), "/[./]/", "-")}"
+  description = "Routing to pods on ${element(google_compute_instance.k8s-worker.*.name, count.index)}"
+  dest_range  = "${element(google_compute_instance.k8s-worker.*.metadata.pod-cidr, count.index)}"
+  next_hop_ip = "${element(google_compute_instance.k8s-worker.*.network_interface.0.network_ip, count.index)}"
+
+  network = "${google_compute_network.vpc.self_link}"
+}
