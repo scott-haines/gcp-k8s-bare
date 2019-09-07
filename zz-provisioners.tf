@@ -30,7 +30,7 @@ resource "null_resource" "generate-certs-kubeconfigs-and-distribute" {
     # Note the indentation of the EOT - Terraform is picky about the EOTs
     inline = [<<EOT
       cd certificate-configs
-      KUBERNETES_ILB_ADDRESS=${google_compute_forwarding_rule.k8s-api-forwarding-rule.ip_address}
+      KUBERNETES_API_FQDN=${var.k8s-api-fqdn}
       
       for worker in ${join(" ", google_compute_instance.k8s-worker.*.id)}; do
         cp certificate-templates/worker-template.json certificate-templates/$${worker}-csr.json
@@ -60,7 +60,7 @@ resource "null_resource" "generate-certs-kubeconfigs-and-distribute" {
         kubectl config set-cluster gcp-kubernetes \
           --certificate-authority=ca.pem \
           --embed-certs=true \
-          --server=https://$${KUBERNETES_ILB_ADDRESS}:6443 \
+          --server=https://$${KUBERNETES_API_FQDN}:6443 \
           --kubeconfig=$${worker}.kubeconfig
 
         kubectl config set-credentials system:node:$${worker} \
@@ -81,7 +81,7 @@ resource "null_resource" "generate-certs-kubeconfigs-and-distribute" {
       kubectl config set-cluster gcp-kubernetes \
         --certificate-authority=ca.pem \
         --embed-certs=true \
-        --server=https://$${KUBERNETES_ILB_ADDRESS}:6443 \
+        --server=https://$${KUBERNETES_API_FQDN}:6443 \
         --kubeconfig=kube-proxy.kubeconfig
 
       kubectl config set-credentials system:kube-proxy \
@@ -396,6 +396,229 @@ resource "null_resource" "configure-kube-apiserver-rbac" {
     inline = [
       "kubectl apply --kubeconfig admin.kubeconfig -f kubeapi-cluster-role.yaml",
       "kubectl apply --kubeconfig admin.kubeconfig -f kubeapi-cluster-role-binding.yaml"
+    ]
+  }
+}
+
+resource "null_resource" "download-binaries-for-workers" {
+  depends_on = [
+    "null_resource.configure-kube-apiserver-rbac"
+  ]
+
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+    host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "curl -L https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.15.0/crictl-v1.15.0-linux-amd64.tar.gz -o crictl-v1.15.0-linux-amd64.tar.gz",
+      "curl https://storage.googleapis.com/gvisor/releases/nightly/latest/runsc -o runsc",
+      "curl -L https://github.com/opencontainers/runc/releases/download/v1.0.0-rc8/runc.amd64 -o runc",
+      "curl -L https://github.com/containernetworking/plugins/releases/download/v0.8.2/cni-plugins-linux-amd64-v0.8.2.tgz -o cni-plugins-linux-amd64-v0.8.2.tgz",
+      "curl -L https://github.com/containerd/containerd/releases/download/v1.2.9/containerd-1.2.9.linux-amd64.tar.gz -o containerd-1.2.9.linux-amd64.tar.gz",
+      "curl https://storage.googleapis.com/kubernetes-release/release/v1.15.3/bin/linux/amd64/kube-proxy -o kube-proxy",
+      "curl https://storage.googleapis.com/kubernetes-release/release/v1.15.3/bin/linux/amd64/kubelet -o kubelet"
+    ]
+  }
+}
+
+resource "null_resource" "provision-worker-nodes-prep" {
+  count = "${var.k8s-worker-count}"
+  depends_on = [
+    "null_resource.download-binaries-for-workers"
+  ]
+
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+    host        = "${element(google_compute_instance.k8s-worker.*.network_interface.0.network_ip, count.index)}"
+
+    bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+    bastion_private_key = "${file("${var.ssh-private-key}")}"
+  }
+
+  provisioner "remote-exec" {
+    connection {
+      type        = "ssh"
+      user        = "${var.ssh-username}"
+      agent       = "false"
+      private_key = "${file("${var.ssh-private-key}")}"
+      host        = "${google_compute_instance.bastion.network_interface.0.network_ip}"
+    }
+    # This task runs on the bastion
+    # This task will copy the binaries from the bastion over to each worker node
+    inline = [
+      "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null crictl-v1.15.0-linux-amd64.tar.gz ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
+      "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null runsc ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
+      "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null runc ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
+      "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null cni-plugins-linux-amd64-v0.8.2.tgz ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
+      "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null containerd-1.2.9.linux-amd64.tar.gz ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
+      "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null kube-proxy ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
+      "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null kubelet ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
+      "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $(which kubectl) ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
+    ]
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo mkdir -p /etc/cni/net.d /opt/cni/bin /var/lib/kubelet /var/lib/kube-proxy /var/lib/kubernetes /var/run/kubernetes /etc/containerd/",
+      "chmod +x kube-proxy kubelet runc runsc",
+      "sudo mv kubectl kube-proxy kubelet runc runsc /usr/local/bin/",
+      "sudo tar -xvf crictl-v1.15.0-linux-amd64.tar.gz -C /usr/local/bin/",
+      "sudo tar -xvf cni-plugins-linux-amd64-v0.8.2.tgz -C /opt/cni/bin/",
+      "sudo tar -xvf containerd-1.2.9.linux-amd64.tar.gz -C /"
+    ]
+  }
+
+  provisioner "file" {
+    source      = "service-templates/10-bridge-template.conf"
+    destination = "10-bridge-template.conf"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/99-loopback.conf"
+    destination = "99-loopback.conf"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/containerd-config.toml"
+    destination = "containerd-config.toml"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/containerd.service"
+    destination = "containerd.service"
+  }
+
+  provisioner "remote-exec" {
+    inline = [<<EOT
+      export POD_CIDR="${element(google_compute_instance.k8s-worker.*.metadata.pod-cidr, count.index)}"
+      envsubst < 10-bridge-template.conf > 10-bridge.conf
+      sudo mv 10-bridge.conf /etc/cni/net.d/10-bridge.conf
+      sudo mv 99-loopback.conf /etc/cni/net.d/99-loopback.conf
+      sudo mv containerd-config.toml /etc/containerd/config.toml
+      sudo mv containerd.service /etc/systemd/system/containerd.service
+    EOT
+    ]
+  }
+}
+
+resource "null_resource" "provision-worker-nodes-kubelet" {
+  count = "${var.k8s-worker-count}"
+  depends_on = [
+    "null_resource.provision-worker-nodes-prep"
+  ]
+
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+    host        = "${element(google_compute_instance.k8s-worker.*.network_interface.0.network_ip, count.index)}"
+
+    bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+    bastion_private_key = "${file("${var.ssh-private-key}")}"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo mv ${element(google_compute_instance.k8s-worker.*.name, count.index)}-key.pem /var/lib/kubelet/",
+      "sudo mv ${element(google_compute_instance.k8s-worker.*.name, count.index)}.pem /var/lib/kubelet/",
+      "sudo mv ${element(google_compute_instance.k8s-worker.*.name, count.index)}.kubeconfig /var/lib/kubelet/kubeconfig",
+      "sudo mv ca.pem /var/lib/kubernetes/"
+    ]
+  }
+
+  provisioner "file" {
+    source      = "service-templates/kubelet-config-template.yaml"
+    destination = "kubelet-config-template.yaml"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/kubelet.service"
+    destination = "kubelet.service"
+  }
+
+  provisioner "remote-exec" {
+    inline = [<<EOT
+      export POD_CIDR="${element(google_compute_instance.k8s-worker.*.metadata.pod-cidr, count.index)}"
+      export CLUSTER_DNS=${cidrhost(var.k8s-service-cluster-ip-cidr, 10)}
+      export HOSTNAME="${element(google_compute_instance.k8s-worker.*.name, count.index)}"
+      envsubst < kubelet-config-template.yaml > kubelet-config.yaml
+      sudo mv kubelet-config.yaml /var/lib/kubelet/kubelet-config.yaml
+      sudo mv kubelet.service /etc/systemd/system/kubelet.service
+    EOT
+    ]
+  }
+}
+
+resource "null_resource" "provision-worker-nodes-kube-proxy" {
+  count = "${var.k8s-worker-count}"
+  depends_on = [
+    "null_resource.provision-worker-nodes-kubelet"
+  ]
+
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+    host        = "${element(google_compute_instance.k8s-worker.*.network_interface.0.network_ip, count.index)}"
+
+    bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+    bastion_private_key = "${file("${var.ssh-private-key}")}"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/kube-proxy-config-template.yaml"
+    destination = "kube-proxy-config-template.yaml"
+  }
+
+  provisioner "file" {
+    source      = "service-templates/kube-proxy.service"
+    destination = "kube-proxy.service"
+  }
+
+  provisioner "remote-exec" {
+    inline = [<<EOT
+      export POD_CIDR="${element(google_compute_instance.k8s-worker.*.metadata.pod-cidr, count.index)}"
+      envsubst < kube-proxy-config-template.yaml > kube-proxy-config.yaml
+      sudo mv kube-proxy-config.yaml /var/lib/kube-proxy/kube-proxy-config.yaml
+      sudo mv kube-proxy.service /etc/systemd/system/kube-proxy.service
+      sudo mv kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig
+    EOT
+    ]
+  }
+}
+
+resource "null_resource" "provision-worker-nodes-start-worker-services" {
+  count = "${var.k8s-worker-count}"
+  depends_on = [
+    "null_resource.provision-worker-nodes-kube-proxy"
+  ]
+
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+    host        = "${element(google_compute_instance.k8s-worker.*.network_interface.0.network_ip, count.index)}"
+
+    bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+    bastion_private_key = "${file("${var.ssh-private-key}")}"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo systemctl daemon-reload",
+      "sudo systemctl enable containerd kubelet kube-proxy",
+      "sudo systemctl start containerd kubelet kube-proxy"
     ]
   }
 }
