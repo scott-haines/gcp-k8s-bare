@@ -29,11 +29,4 @@ resource "google_compute_instance" "k8s-worker" {
     bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
     bastion_private_key = "${file("${var.ssh-private-key}")}"
   }
-
-  provisioner "remote-exec" {
-    inline = [
-      "sudo apt update",
-      "sudo apt install -y socat conntrack ipset"
-    ]
-  }
 }

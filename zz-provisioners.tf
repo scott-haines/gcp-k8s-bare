@@ -616,9 +616,46 @@ resource "null_resource" "provision-worker-nodes-start-worker-services" {
 
   provisioner "remote-exec" {
     inline = [
+      "sudo apt update",
+      "sudo apt install -y socat conntrack ipset"
+    ]
+  }
+
+  provisioner "remote-exec" {
+    inline = [
       "sudo systemctl daemon-reload",
       "sudo systemctl enable containerd kubelet kube-proxy",
       "sudo systemctl start containerd kubelet kube-proxy"
+    ]
+  }
+}
+
+resource "null_resource" "configure-core-dns" {
+  depends_on = [
+    "null_resource.provision-worker-nodes-start-worker-services"
+  ]
+
+  connection {
+    type        = "ssh"
+    user        = "${var.ssh-username}"
+    agent       = "false"
+    private_key = "${file("${var.ssh-private-key}")}"
+
+    # Only execute this on the first master (index 0)
+    host = "${google_compute_instance.k8s-master.0.network_interface.0.network_ip}"
+
+    bastion_host        = "${google_compute_instance.bastion.network_interface.0.access_config.0.nat_ip}"
+    bastion_private_key = "${file("${var.ssh-private-key}")}"
+  }
+
+  provisioner "file" {
+    source      = "deployments/coredns.yaml"
+    destination = "coredns.yaml"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "kubectl apply --kubeconfig admin.kubeconfig -f coredns.yaml"
     ]
   }
 }
