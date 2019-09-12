@@ -419,7 +419,6 @@ resource "null_resource" "download-binaries-for-workers" {
       "curl https://storage.googleapis.com/gvisor/releases/nightly/latest/runsc -o runsc",
       "curl -L https://github.com/opencontainers/runc/releases/download/v1.0.0-rc8/runc.amd64 -o runc",
       "curl -L https://github.com/containernetworking/plugins/releases/download/v0.8.2/cni-plugins-linux-amd64-v0.8.2.tgz -o cni-plugins-linux-amd64-v0.8.2.tgz",
-      "curl -L https://github.com/containerd/containerd/releases/download/v1.2.9/containerd-1.2.9.linux-amd64.tar.gz -o containerd-1.2.9.linux-amd64.tar.gz",
       "curl https://storage.googleapis.com/kubernetes-release/release/v1.15.3/bin/linux/amd64/kube-proxy -o kube-proxy",
       "curl https://storage.googleapis.com/kubernetes-release/release/v1.15.3/bin/linux/amd64/kubelet -o kubelet"
     ]
@@ -458,7 +457,6 @@ resource "null_resource" "provision-worker-nodes-prep" {
       "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null runsc ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
       "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null runc ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
       "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null cni-plugins-linux-amd64-v0.8.2.tgz ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
-      "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null containerd-1.2.9.linux-amd64.tar.gz ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
       "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null kube-proxy ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
       "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null kubelet ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
       "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $(which kubectl) ${element(google_compute_instance.k8s-worker.*.name, count.index)}:~/",
@@ -467,12 +465,11 @@ resource "null_resource" "provision-worker-nodes-prep" {
 
   provisioner "remote-exec" {
     inline = [
-      "sudo mkdir -p /etc/cni/net.d /opt/cni/bin /var/lib/kubelet /var/lib/kube-proxy /var/lib/kubernetes /var/run/kubernetes /etc/containerd/",
+      "sudo mkdir -p /etc/cni/net.d /opt/cni/bin /var/lib/kubelet /var/lib/kube-proxy /var/lib/kubernetes /var/run/kubernetes",
       "chmod +x kube-proxy kubelet runc runsc",
       "sudo mv kubectl kube-proxy kubelet runc runsc /usr/local/bin/",
       "sudo tar -xvf crictl-v1.15.0-linux-amd64.tar.gz -C /usr/local/bin/",
-      "sudo tar -xvf cni-plugins-linux-amd64-v0.8.2.tgz -C /opt/cni/bin/",
-      "sudo tar -xvf containerd-1.2.9.linux-amd64.tar.gz -C /"
+      "sudo tar -xvf cni-plugins-linux-amd64-v0.8.2.tgz -C /opt/cni/bin/"
     ]
   }
 
@@ -486,24 +483,12 @@ resource "null_resource" "provision-worker-nodes-prep" {
     destination = "99-loopback.conf"
   }
 
-  provisioner "file" {
-    source      = "service-templates/containerd-config.toml"
-    destination = "containerd-config.toml"
-  }
-
-  provisioner "file" {
-    source      = "service-templates/containerd.service"
-    destination = "containerd.service"
-  }
-
   provisioner "remote-exec" {
     inline = [<<EOT
       export POD_CIDR="${element(google_compute_instance.k8s-worker.*.metadata.pod-cidr, count.index)}"
       envsubst < 10-bridge-template.conf > 10-bridge.conf
       sudo mv 10-bridge.conf /etc/cni/net.d/10-bridge.conf
       sudo mv 99-loopback.conf /etc/cni/net.d/99-loopback.conf
-      sudo mv containerd-config.toml /etc/containerd/config.toml
-      sudo mv containerd.service /etc/systemd/system/containerd.service
     EOT
     ]
   }
@@ -624,8 +609,8 @@ resource "null_resource" "provision-worker-nodes-start-worker-services" {
   provisioner "remote-exec" {
     inline = [
       "sudo systemctl daemon-reload",
-      "sudo systemctl enable containerd kubelet kube-proxy",
-      "sudo systemctl start containerd kubelet kube-proxy"
+      "sudo systemctl enable kubelet kube-proxy",
+      "sudo systemctl start kubelet kube-proxy"
     ]
   }
 }

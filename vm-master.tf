@@ -4,6 +4,10 @@ resource "google_compute_instance" "k8s-master" {
   machine_type   = "f1-micro"
   can_ip_forward = "true"
   tags           = ["k8s-master"]
+
+  depends_on = [
+    "google_compute_router_nat.nat-cloud"
+  ]
   metadata = {
     ssh-keys = "${var.ssh-username}:${file("~/.ssh/id_rsa.pub")}"
   }
