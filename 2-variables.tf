@@ -1,6 +1,7 @@
 variable "project-name" {}
 variable "k8s-bastion-fqdn" {}
 variable "k8s-api-fqdn" {}
+variable "k8s-traefik-fqdn" {}
 variable "dns-k8s-bastion-username" {}
 variable "dns-k8s-bastion-password" {}
 variable "dns-k8s-api-username" {}
